@@ -22,10 +22,10 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"strconv"
-
+	"github.com/containerd/containerd/log"
 	"github.com/pkg/errors"
 	bolt "go.etcd.io/bbolt"
+	"strconv"
 )
 
 type (
@@ -101,7 +101,14 @@ func (m *PoolMetadata) AddDevice(ctx context.Context, info *DeviceInfo) error {
 		// See https://github.com/containerd/containerd/pull/3436 for more context.
 		var existing DeviceInfo
 		if err := getObject(devicesBucket, info.Name, &existing); err == nil && existing.State != Faulty {
-			return errors.Wrapf(ErrAlreadyExists, "device %q is already there %+v", info.Name, existing)
+			if existing.State == Activated {
+				log.G(ctx).Infof("device %q %+v is already exist, start to delete it in the bucket", info.Name, existing)
+				if err := devicesBucket.Delete([]byte(info.Name)); err != nil {
+					return errors.Wrapf(err, "failed to delete exist device for %q", info.Name)
+				}
+			} else {
+				return errors.Wrapf(ErrAlreadyExists, "device %q is already there %+v", info.Name, existing)
+			}
 		}
 
 		// Find next available device ID
