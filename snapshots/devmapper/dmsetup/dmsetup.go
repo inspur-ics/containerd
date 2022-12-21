@@ -19,15 +19,16 @@
 package dmsetup
 
 import (
+	"context"
 	"fmt"
+	"github.com/containerd/containerd/log"
+	"github.com/pkg/errors"
+	"golang.org/x/sys/unix"
 	"io"
 	"os"
 	"os/exec"
 	"strconv"
 	"strings"
-
-	"github.com/pkg/errors"
-	"golang.org/x/sys/unix"
 )
 
 const (
@@ -348,6 +349,13 @@ func BlockDeviceSize(path string) (int64, error) {
 func dmsetup(args ...string) (string, error) {
 	data, err := exec.Command("dmsetup", args...).CombinedOutput()
 	output := string(data)
+	if args[0] != "status" {
+		// Print dmsetup command and output in the log, except dmsetup status xxxx-snap-x command,
+		// because the dmsetup status command is called too frequently
+		ctx := context.Background()
+		log.G(ctx).Infof("dmsetup %s", strings.Join(args, " "))
+		log.G(ctx).Infof("dmsetup output: %s", strings.Replace(output, "\n", " ", -1))
+	}
 	if err != nil {
 		// Try find Linux error code otherwise return generic error with dmsetup output
 		if errno, ok := tryGetUnixError(output); ok {
